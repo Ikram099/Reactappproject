@@ -1,14 +1,10 @@
-import dotenv from 'dotenv';
 import express from 'express';
+import dotenv from 'dotenv';
 import bodyParser from 'body-parser';
 import mongoose from 'mongoose';
-import { createRequire } from 'module';
-import ProductSpecification from './models/ProductSpecification.js';
+import ProductSpecification from './models/ProductSpecification.js'; // Attention ici aussi
 
 dotenv.config();
-
-const require = createRequire(import.meta.url);
-const kafka = require('kafka-node');
 
 const app = express();
 app.use(bodyParser.json());
@@ -20,18 +16,10 @@ mongoose.connect(
     useNewUrlParser: true,
     useUnifiedTopology: true
   }
-);
-
-// Connexion Kafka
-const client = new kafka.KafkaClient({ kafkaHost: process.env.KAFKA_BROKER });
-const producer = new kafka.Producer(client);
-
-producer.on('ready', () => {
-  console.log('✅ Kafka Producer is connected and ready.');
-});
-
-producer.on('error', (err) => {
-  console.error('❌ Kafka Producer error:', err);
+).then(() => {
+  console.log('✅ Connecté à MongoDB Atlas');
+}).catch((err) => {
+  console.error('❌ Erreur de connexion MongoDB :', err);
 });
 
 // Route : Product Specification
@@ -50,31 +38,17 @@ app.post('/send-specification', async (req, res) => {
     } else {
       const newSpec = new ProductSpecification(specification);
       await newSpec.save();
-      console.log('✅ Spécification enregistrée dans MongoDB');
+      console.log('✅ Nouvelle spécification enregistrée dans MongoDB');
     }
+
+    res.status(200).json({ message: '✅ Specification enregistrée ou mise à jour dans MongoDB' });
   } catch (err) {
-    console.error('❌ Erreur MongoDB Specification :', err);
-    return res.status(500).json({ error: 'Erreur MongoDB' });
+    console.error('❌ Erreur lors de l\'enregistrement dans MongoDB :', err);
+    res.status(500).json({ error: 'Erreur MongoDB' });
   }
-
-  const payloads = [
-    {
-      topic: process.env.KAFKA_TOPIC_SPECIFICATION,
-      messages: JSON.stringify(specification),
-    },
-  ];
-
-  producer.send(payloads, (err, data) => {
-    if (err) {
-      console.error('❌ Erreur Kafka Specification :', err);
-      return res.status(500).json({ error: 'Erreur Kafka' });
-    }
-    console.log('📨 Message Specification envoyé à Kafka :', data);
-    res.status(200).json({ message: 'Specification envoyée à Kafka et MongoDB', data });
-  });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 API listening on port ${PORT}`);
+  console.log(`🚀 Serveur API en écoute sur le port ${PORT}`);
 });
